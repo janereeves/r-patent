@@ -11,7 +11,8 @@ library(Rgraphviz)
 library(wordcloud)
 # for calculating the tf-idf
 library(textir)
-#library(fpc)
+# flexible prodedures for clustering
+library(fpc)
 #read the csv file
 library(lsa)
 title <- read.csv2("title2.csv")
@@ -20,6 +21,7 @@ abstract <- read.csv2("abstract.csv")
 titles <- title$title
 abstracts <- abstract$x
 #titleabstract <- cbind.data.frame(titles = titles,abstracts = abstracts)
+# paste to one column
 titleabstract <- data.frame(paste(titles,abstracts))
 #titleabstract <- data.frame(lapply(titleabstract, as.character), stringsAsFactors=FALSE)
 write.csv2(titleabstract,"titleabstract2.csv")
@@ -28,6 +30,7 @@ write.csv2(titleabstract,"titleabstract2.csv")
 #S3 class Corpus, PlainTextDocument
 
 corpus <- Corpus(DataframeSource(titleabstract))
+# transfer "-", "/" to spaces
 corpus <- tm_map(corpus, content_transformer(function(x) chartr("-/","  ", x)))
 corpus <- tm_map(corpus, removePunctuation, preserve_intra_word_dashes=FALSE)
 #tolower is not S3 method in tm package, maybe useful as a S3 method. 
@@ -46,17 +49,20 @@ corpus <- tm_map(corpus, stemDocument)
 # ?this sapply needs to be understood
 # convert Corpus to data frame
 outputcorpus <- unlist(sapply(corpus,"[","content"))
+outputcorpus2 <- data.frame(outputcorpus)
+write.csv(outputcorpus2, "corpus.csv")
 
 #Use the regular expression symbol \\W to match non-word characters, using + to indicate one or more in a row, 
 #along with gregexpr to find all matches in a string. 
 #Words are the number of word separators plus 1.
+# count the number of terms per document
 countterm <- sapply(gregexpr("\\W+", outputcorpus), length) + 1
+# total number of terms
 nterm <- sum(countterm)
+# total number of documents
 ndoc <- length(corpus)
+# average number of terms per document
 norm <- nterm/ndoc
-
-outputcorpus <- data.frame(outputcorpus)
-write.csv(outputcorpus, "corpus.csv")
 
 # transform the corpus to document-term matrix
 doctermmatrix <- DocumentTermMatrix(corpus)
@@ -68,12 +74,16 @@ doctermmatrix <- DocumentTermMatrix(corpus)
 #termdocmatrix <- TermDocumentMatrix(corpus)
 tfidf <- tfidf(doctermmatrix,FALSE)
 #tfidf <- weightTfIdf(doctermmatrix,FALSE)
+# tfidf to ntfidf
 ntfidf <- tfidf*norm/countterm
-
+# get the top 100 terms
 matrix.ntfidf <- as.matrix(ntfidf)
 sortterm <- sort(colSums(matrix.ntfidf), decreasing=TRUE)
+write.csv2(sortterm[1:100],"sortterm.csv")
 freqterm <-  names(sortterm[1:100])
 write.csv2(freqterm,"freqterm.csv")
+# select the key terms, stem the key terms manually and choose the matrix
+# 100 is enough?
 freqtermselect <- read.csv2("freqtermselect.csv")
 freqtermselect <- freqtermselect$x
 freqtermselect <- as.vector(freqtermselect)
@@ -85,7 +95,7 @@ cosdoc[is.nan(cosdoc)] = 0
 costerm[is.nan(costerm)] = 0
 corrplot(costerm)
 corrplot(cosdoc)
-cordoc2 <- cor(t(matrix.ntfidf))
+#cordoc2 <- cor(t(matrix.ntfidf))
 
 clusterresult <- kmeans(ntfidf,3)
 plotcluster(matrix.ntfidf, clusterresult$cluster)
